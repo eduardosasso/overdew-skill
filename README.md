@@ -6,27 +6,18 @@ Works with any agent that supports [Agent Skills](https://skills.sh) (Claude Cod
 
 ## Install
 
+First get your token: open [overdew.app](https://overdew.app), click your avatar (top right) → **API Tokens** → create one and copy the `od_…` secret (shown only once). Then paste this whole block with your token filled in:
+
 ```bash
 npx skills add eduardosasso/overdew-skill -g
+mkdir -p ~/.config/overdew && printf %s "od_...your-token..." > ~/.config/overdew/token && chmod 600 ~/.config/overdew/token
 ```
 
-`-g` installs it for your user (all projects). Drop it to install into the current project only.
+That's the entire setup — the skill installs for your user (all projects) and the token lives in its own file (`~/.config/overdew/token`), no shell configuration needed.
 
-## Set up your token
+**Even easier**: install the skill, then just tell your agent *"set up overdew, here's my token: od_…"* — the skill saves it to that file for you.
 
-1. Open [overdew.app](https://overdew.app), click your avatar (top right), and find **API Tokens**.
-2. Create a token with a label like `claude-code` and copy the `od_…` secret — it's shown only once.
-3. Put it in your shell so agent sessions inherit it:
-
-```bash
-# zsh / bash
-echo 'export OVERDEW_TOKEN=od_...' >> ~/.zshrc
-
-# fish
-set -Ux OVERDEW_TOKEN od_...
-```
-
-Lost a token? Revoke it in the same drawer and mint a new one — revocation is instant.
+Lost a token? Revoke it in the drawer and mint a new one — revocation is instant. Power users can set `$OVERDEW_TOKEN` instead; the env var wins over the file.
 
 ## Use it
 

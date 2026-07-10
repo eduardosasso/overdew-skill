@@ -17,17 +17,28 @@ one sticky note. No CLI, no repo checkout — just curl.
 
 ## Auth & setup
 
-- **Token**: every call sends `Authorization: Bearer $OVERDEW_TOKEN`.
-- **Base URL**: `$OVERDEW_URL`, default the production host `https://overdew.app`.
+- **Token**: every call sends `Authorization: Bearer <token>`. Resolve it once
+  at the start of the task: the `$OVERDEW_TOKEN` env var if set, else the
+  token file `~/.config/overdew/token`.
+- **Base URL**: `$OVERDEW_URL` if set, else `https://overdew.app`.
+
+Read both values first, then substitute the **literal values** into every
+command — shell state (exports) does not persist between agent tool calls, so
+`$OVERDEW_TOKEN` in the examples below is a placeholder to fill in, not a
+variable to rely on. `Bearer $(cat ~/.config/overdew/token)` inline also works
+in any shell.
+
+**No token anywhere?** Tell the user to mint one: open overdew → account
+drawer (their avatar, top-right) → **API Tokens** → new token with a label,
+copy the `od_…` secret (shown once). When they paste it to you, save it for
+them so every future session finds it:
 
 ```bash
-export OVERDEW_TOKEN=od_...              # the user's personal access token
-export OVERDEW_URL=${OVERDEW_URL:-https://overdew.app}
+mkdir -p ~/.config/overdew
+printf %s "od_...paste..." > ~/.config/overdew/token
+chmod 600 ~/.config/overdew/token
 ```
 
-If `$OVERDEW_TOKEN` is unset, stop and tell the user to mint one: open overdew
-→ account drawer (their avatar, top-right) → **API Tokens** → new token with a
-label, copy the `od_…` secret (shown once), and set it as `OVERDEW_TOKEN`.
 A missing or revoked token returns `401 Unauthorized`.
 
 ## Addressing
