@@ -30,14 +30,22 @@ in any shell.
 
 **No token anywhere?** Tell the user to mint one: open overdew → account
 drawer (their avatar, top-right) → **API Tokens** → new token with a label,
-copy the `od_…` secret (shown once). When they paste it to you, save it for
-them so every future session finds it:
+copy the `od_…` secret (shown once). Then offer both ways in:
 
-```bash
-mkdir -p ~/.config/overdew
-printf %s "od_...paste..." > ~/.config/overdew/token
-chmod 600 ~/.config/overdew/token
-```
+1. They paste the token to you — save it so every future session finds it:
+
+   ```bash
+   mkdir -p ~/.config/overdew
+   printf %s "od_...paste..." > ~/.config/overdew/token
+   chmod 600 ~/.config/overdew/token
+   ```
+
+2. Or they run the installer themselves in a terminal (saves the token and
+   verifies it against the server):
+
+   ```bash
+   npx github:eduardosasso/overdew-skill od_...their-token...
+   ```
 
 A missing or revoked token returns `401 Unauthorized`.
 
