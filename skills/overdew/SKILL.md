@@ -17,16 +17,21 @@ one sticky note. No CLI, no repo checkout — just curl.
 
 ## Auth & setup
 
-- **Token**: every call sends `Authorization: Bearer <token>`. Resolve it once
-  at the start of the task: the `$OVERDEW_TOKEN` env var if set, else the
-  token file `~/.config/overdew/token`.
-- **Base URL**: `$OVERDEW_URL` if set, else `https://overdew.app`.
+Base URL and token always travel as a **pair** — a token only works on the
+server that minted it. Resolve the pair once at the start of the task, in
+this order:
 
-Read both values first, then substitute the **literal values** into every
-command — shell state (exports) does not persist between agent tool calls, so
-`$OVERDEW_TOKEN` in the examples below is a placeholder to fill in, not a
-variable to rely on. `Bearer $(cat ~/.config/overdew/token)` inline also works
-in any shell.
+1. **The user's explicit ask wins.** "…on prod" → `https://overdew.app` +
+   the token file `~/.config/overdew/token`. "…on local/dev" → the
+   `$OVERDEW_URL`/`$OVERDEW_TOKEN` env pair (or ask which local server).
+2. Otherwise the **env pair** (`$OVERDEW_URL` + `$OVERDEW_TOKEN`) if set —
+   dev repos pin their sessions to a local server this way.
+3. Otherwise **prod defaults**: `https://overdew.app` + the token file.
+
+Then substitute the **literal values** into every command — shell state
+(exports) does not persist between agent tool calls, so `$OVERDEW_TOKEN` in
+the examples below is a placeholder to fill in, not a variable to rely on.
+`Bearer $(cat ~/.config/overdew/token)` inline also works in any shell.
 
 **No token anywhere?** Tell the user to mint one: open overdew → account
 drawer (their avatar, top-right) → **API Tokens** → new token with a label,
