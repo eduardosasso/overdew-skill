@@ -39,4 +39,4 @@ The skill triggers on mentions of overdew, boards, or stories, and acts as **you
 
 - The skill talks to `https://overdew.app` by default; set `OVERDEW_URL` to point elsewhere (e.g. a local dev server).
 - Each client should get its own token, so you can revoke one without breaking the others.
-- Canonical source lives in the main overdew repo (`.claude/skills/overdew/SKILL.md`) and is mirrored here on release.
+- This repo is the skill's single source of truth — the app repo links here rather than carrying a copy.
