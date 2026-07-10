@@ -1,0 +1,12 @@
+{
+  "name": "overdew",
+  "version": "0.1.0",
+  "description": "One-command setup for the overdew agent skill: npx overdew <token>",
+  "bin": {
+    "overdew": "bin/install.js"
+  },
+  "files": ["bin", "skills"],
+  "repository": "github:eduardosasso/overdew-skill",
+  "homepage": "https://overdew.app",
+  "license": "MIT"
+}

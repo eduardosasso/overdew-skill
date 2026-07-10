@@ -6,16 +6,22 @@ Works with any agent that supports [Agent Skills](https://skills.sh) (Claude Cod
 
 ## Install
 
-First get your token: open [overdew.app](https://overdew.app), click your avatar (top right) → **API Tokens** → create one and copy the `od_…` secret (shown only once). Then paste this whole block with your token filled in:
+Get your token: open [overdew.app](https://overdew.app), click your avatar (top right) → **API Tokens** → create one and copy the `od_…` secret (shown only once). Then one command:
 
 ```bash
-npx skills add eduardosasso/overdew-skill -g
-mkdir -p ~/.config/overdew && printf %s "od_...your-token..." > ~/.config/overdew/token && chmod 600 ~/.config/overdew/token
+npx github:eduardosasso/overdew-skill od_...your-token...
 ```
 
-That's the entire setup — the skill installs for your user (all projects) and the token lives in its own file (`~/.config/overdew/token`), no shell configuration needed.
+That's the entire setup: it saves your token to its own file (`~/.config/overdew/token`) and installs the skill for Claude Code (`~/.claude/skills/overdew`) — no shell configuration, nothing to edit.
 
-**Even easier**: install the skill, then just tell your agent *"set up overdew, here's my token: od_…"* — the skill saves it to that file for you.
+<details>
+<summary>Other ways to install</summary>
+
+- Via the skills.sh CLI (skill only — you still need the token step):
+  `npx skills add eduardosasso/overdew-skill -g`, then tell your agent *"set up overdew, here's my token: od_…"* and it saves the file for you.
+- Manual: `mkdir -p ~/.config/overdew && printf %s "od_..." > ~/.config/overdew/token && chmod 600 ~/.config/overdew/token`
+
+</details>
 
 Lost a token? Revoke it in the drawer and mint a new one — revocation is instant. Power users can set `$OVERDEW_TOKEN` instead; the env var wins over the file.
 
