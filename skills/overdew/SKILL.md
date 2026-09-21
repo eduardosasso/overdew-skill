@@ -74,14 +74,59 @@ confirming `GET` is optional right after a mutation.
 | Who am I | `GET /user/profile` | — → `{username,…}` |
 | List boards | `GET /boards` | — |
 | List a board's notes | `GET /boards/{ws}/{slug}/notes` | — |
+| Search a board’s notes | `GET /boards/{ws}/{slug}/notes/search` | Query: `tag`, `status`, `limit`, `after`; see below |
 | Read one note | `GET /notes/{id}` | — (adds `attachments`) |
 | Create a story | `POST /boards/{ws}/{slug}/notes` | `content` (title, **required**); opt `color`, `x`, `y` |
-| Update a story | `PUT /notes/{id}` | any of `content`, `description`, `checklist`, `tags`, `assigned_to`, `color`, `due_date`, `stage` |
+| Update a story | `PUT /notes/{id}` | any of `content`, `description`, `checklist`, `tags`, `tags_add`, `tags_remove`, `assigned_to`, `color`, `due_date`, `stage` |
 | Complete a story | `PUT /notes/{id}/complete` | — → `{completed_at}` |
+| Reopen a story | `DELETE /notes/{id}/complete` | —; works for completed and archived cards |
 
 `color` ∈ yellow, pink, green, blue, orange. `tags` is a comma-separated
 string. `due_date` is `YYYY-MM-DD` (must be tomorrow or later; `""` clears).
 Only fields you send change.
+
+## Tags and filtered search
+
+Tags use ordinary text. No names have special behavior. The server trims,
+lowercases, normalizes Unicode, and removes empty values and duplicates.
+Commas separate tags, so a single tag cannot contain a comma.
+
+`tags` replaces the full set. Use `tags_add` and `tags_remove` to change
+specific tags and preserve tags added by other people. Both accept
+comma-separated strings. Removal wins if a tag occurs in both. Do not send
+`tags` with either patch field; that returns `400`.
+
+```bash
+curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
+  --data-urlencode "tags_add=mobile,review" \
+  --data-urlencode "tags_remove=draft" \
+  $OVERDEW_URL/api/notes/25
+```
+
+Search uses exact tag matches. Repeated `tag` parameters require every tag.
+`status` accepts comma-separated `active`, `completed`, and `archived`.
+The default is `active,completed`. Explicitly include `archived` to find
+older completed work. Deleted cards never appear. Normal board listing
+remains unchanged and excludes archived cards.
+
+```bash
+curl -s -G -H "Authorization: Bearer $OVERDEW_TOKEN" \
+  --data-urlencode "tag=mobile" \
+  --data-urlencode "tag=review" \
+  --data-urlencode "status=completed,archived" \
+  --data-urlencode "limit=100" \
+  $OVERDEW_URL/api/boards/acme/launch/notes/search
+```
+
+The response is `{notes: [...], nextCursor: number | null}`. Results sort
+by increasing card ID. `limit` defaults to 100 and accepts 1–100. If
+`nextCursor` is not null, request the next page with `after=nextCursor`.
+Keep the same tags, status, and limit. Continue until the cursor is null.
+A single page does not prove that all matching cards were checked.
+
+Use the note’s `id` and `tags` from each result to track work in Overdew.
+Reopen a failed fix with `DELETE /notes/{id}/complete`; this preserves tags.
+Tag conventions belong to the calling workflow, not the application.
 
 ## Story lifecycle → HTTP
 
@@ -181,7 +226,9 @@ curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
 - **`stage` takes a stage id already on the board, not a name** (`400`
   otherwise; `""` clears). Most boards have none — leave it out.
 - **Complete ≠ gone.** A completed note stays on the board (and in the notes
-  list, `status:1`) for ~48h, then auto-archives. There is no un-complete call.
+  list, `status:1`) for ~48h, then auto-archives (`status:3`). Use filtered
+  search with `status=completed,archived` to find both. Reopen with
+  `DELETE /notes/{id}/complete`.
 - **Live updates via SSE** at `GET /boards/{ws}/{slug}/events`, but a one-shot
   agent should just re-`GET` the notes list rather than hold the stream open.
   Pass `?silent=1` on a `PUT` to suppress the broadcast — normally leave it off
