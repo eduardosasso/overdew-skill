@@ -1,34 +1,37 @@
 ---
 name: overdew
 description: >-
-  Operate overdew sticky-note boards over plain HTTP: list boards, read and
-  create stories (notes), claim a story (assign to self), tick checklist items,
-  update the description, and mark it complete. Trigger whenever the user
-  mentions overdew, a board, or a story/card/note to pick up, create, work, or
-  finish (e.g. "grab the top story on /acme/launch", "add a card to my
-  pipeline board", "mark that overdew story done"). Needs an $OVERDEW_TOKEN
-  personal access token.
+  Operate overdew sticky-note boards over plain HTTP: list boards, find, read
+  and create stories (cards), claim one, tick checklist items, tag it, comment
+  on it, mark it complete or reopen it. Trigger whenever the user mentions
+  overdew, a board, or a story/card/note to pick up, create, work, comment on,
+  or finish (e.g. "grab the top story on /acme/launch", "add a card to my
+  pipeline board", "comment on that overdew card", "mark that story done").
+  Needs an od_… personal access token.
 ---
 
 # overdew
 
 Drive overdew boards through the same REST API the web app uses. One story =
-one sticky note. No CLI, no repo checkout — just curl.
+one card = one sticky note. No CLI, no repo checkout, just curl.
+
+The API is bigger than this file. For anything not covered here, read the
+live spec (no auth needed): `GET $OVERDEW_URL/api/openapi.json`.
 
 ## Auth & setup
 
-Base URL and token always travel as a **pair** — a token only works on the
+Base URL and token always travel as a **pair**: a token only works on the
 server that minted it. Resolve the pair once at the start of the task, in
 this order:
 
 1. **The user's explicit ask wins.** "…on prod" → `https://overdew.app` +
    the token file `~/.config/overdew/token`. "…on local/dev" → the
    `$OVERDEW_URL`/`$OVERDEW_TOKEN` env pair (or ask which local server).
-2. Otherwise the **env pair** (`$OVERDEW_URL` + `$OVERDEW_TOKEN`) if set —
-   dev repos pin their sessions to a local server this way.
+2. Otherwise the **env pair** (`$OVERDEW_URL` + `$OVERDEW_TOKEN`) if set.
+   Dev repos pin their sessions to a local server this way.
 3. Otherwise **prod defaults**: `https://overdew.app` + the token file.
 
-Then substitute the **literal values** into every command — shell state
+Then substitute the **literal values** into every command. Shell state
 (exports) does not persist between agent tool calls, so `$OVERDEW_TOKEN` in
 the examples below is a placeholder to fill in, not a variable to rely on.
 `Bearer $(cat ~/.config/overdew/token)` inline also works in any shell.
@@ -37,7 +40,7 @@ the examples below is a placeholder to fill in, not a variable to rely on.
 drawer (their avatar, top-right) → **API Tokens** → new token with a label,
 copy the `od_…` secret (shown once). Then offer both ways in:
 
-1. They paste the token to you — save it so every future session finds it:
+1. They paste the token to you. Save it so every future session finds it:
 
    ```bash
    mkdir -p ~/.config/overdew
@@ -54,12 +57,21 @@ copy the `od_…` secret (shown once). Then offer both ways in:
 
 A missing or revoked token returns `401 Unauthorized`.
 
-## Addressing
+## Model
 
-A board lives at `/{workspace}/{slug}`. `GET /api/boards` returns each board's
-`workspace_slug` and `slug`; join them for the path used by the note routes,
-e.g. workspace `acme` + slug `launch` → `/api/boards/acme/launch/notes`. A
-personal workspace's slug is the owner's username.
+- **Board**: lives at `/{workspace}/{slug}`. `GET /api/boards` returns each
+  board's `workspace_slug` and `slug`. A personal workspace's slug is the
+  owner's username. Board routes are `/api/boards/{ws}/{slug}/…`.
+- **Card**: has a numeric `id` and is addressed by id alone: `/api/notes/{id}`.
+  Its public link is `https://overdew.app/{ws}/{slug}/{id}-{card-slug}`; the
+  id is the number before the first dash. Fields: `content` (title),
+  `description`, `checklist`, `tags`, `assigned_to`, `color`, `due_date`,
+  `stage`, `status`.
+- **Status**: `0` active, `1` completed, `3` archived. A completed card
+  auto-archives after ~48h. Completed and archived cards are still readable
+  by id and can be reopened.
+- **Conversation**: a card has a flat comment thread. Completing a card
+  closes the work, not the thread.
 
 ## Endpoints
 
@@ -69,46 +81,58 @@ Content-Type by default; non-curl clients must set the header explicitly)
 unless noted. Every `PUT /notes/{id}` echoes the full updated note, so a
 confirming `GET` is optional right after a mutation.
 
-| Do | Method & path | Body fields |
+| Do | Method & path | Notes |
 |----|----|----|
-| Who am I | `GET /user/profile` | — → `{username,…}` |
-| List boards | `GET /boards` | — |
-| List a board's notes | `GET /boards/{ws}/{slug}/notes` | — |
-| Read one note | `GET /notes/{id}` | — (adds `attachments`) |
-| Create a story | `POST /boards/{ws}/{slug}/notes` | `content` (title, **required**); opt `color`, `x`, `y` |
-| Update a story | `PUT /notes/{id}` | any of `content`, `description`, `checklist`, `tags`, `assigned_to`, `color`, `due_date`, `stage` |
-| Complete a story | `PUT /notes/{id}/complete` | — → `{completed_at}` |
+| Who am I | `GET /user/profile` | → `{username,…}` |
+| List boards | `GET /boards` | |
+| List a board's cards | `GET /boards/{ws}/{slug}/notes` | live board: active + recently completed |
+| Search a board | `GET /boards/{ws}/{slug}/notes/search` | `tag` (repeat), `status`, `limit`, `after` |
+| Read one card | `GET /notes/{id}` | adds `attachments`; works for any status |
+| Create a card | `POST /boards/{ws}/{slug}/notes` | `content` **required**; opt `color`, `x`, `y` |
+| Update a card | `PUT /notes/{id}` | any of `content`, `description`, `checklist`, `tags`, `tags_add`, `tags_remove`, `assigned_to`, `color`, `due_date`, `stage` |
+| Complete | `PUT /notes/{id}/complete` | → `{completed_at}` |
+| Reopen | `DELETE /notes/{id}/complete` | back to active, also from archived |
+| Archive | `PUT /notes/{id}/archive` | completed cards only |
+| Delete (permanent) | `DELETE /notes/{id}` | cannot be undone |
+| Read comments | `GET /notes/{id}/comments` | oldest first |
+| Comment | `POST /notes/{id}/comments` | `body` (max 4000 chars) |
+| Delete own comment | `DELETE /comments/{id}` | author only |
+| Attach a file | `POST /notes/{id}/attachments` | multipart, ≤5MB; `GET` lists them |
 
-`color` ∈ yellow, pink, green, blue, orange. `tags` is a comma-separated
-string. `due_date` is `YYYY-MM-DD` (must be tomorrow or later; `""` clears).
-Only fields you send change.
+`color` ∈ yellow, pink, green, blue, orange. `due_date` is `YYYY-MM-DD` (must
+be tomorrow or later; `""` clears). Only fields you send change.
 
-## Story lifecycle → HTTP
+## Recipes
 
-**Who am I** (needed to claim — assign uses your username):
+Every command needs `-H "Authorization: Bearer $OVERDEW_TOKEN"`.
 
-```bash
-curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" $OVERDEW_URL/api/user/profile
-```
+### Find work
 
-**List boards** → pick `workspace_slug`/`slug`:
+**List boards**, then a board's cards (each has `id`, `content`,
+`assigned_to`, `checklist`, `status`). Convention: the "top story" = among
+active (`status:0`) unassigned (`assigned_to:""`) cards, the highest `z` (the
+visually top-most), tie-break by newest `created`:
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" $OVERDEW_URL/api/boards
-```
-
-**List a board's notes** (each note has `id`, `content`, `assigned_to`,
-`checklist`, `status` — 0 active, 1 completed). Convention: the "top story" =
-among active (`status:0`) unassigned (`assigned_to:""`) notes, the highest `z`
-(the visually top-most card), tie-break by newest `created`:
-
-```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" \
   $OVERDEW_URL/api/boards/acme/launch/notes
 ```
 
-**Create a story.** Only `content` (the title) is accepted here — set the
-description/checklist with a follow-up `PUT`. Capture the returned `id`:
+**Search**, including done cards. `status` is comma-separated, default
+`active,completed`; add `archived` for older completed cards. `tag` repeats
+and every tag must match. The result is `{notes, nextCursor}`; pass
+`nextCursor` back as `after` until it is `null`:
+
+```bash
+curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" \
+  "$OVERDEW_URL/api/boards/acme/launch/notes/search?status=active,completed&tag=in-review"
+```
+
+### Create and shape a card
+
+**Create** takes the title only (plus optional `color`/`x`/`y`). Capture the
+returned `id`, then set everything else with a `PUT`:
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" \
@@ -117,73 +141,81 @@ curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" \
   $OVERDEW_URL/api/boards/acme/launch/notes
 ```
 
-**Flesh it out** — description + a 2-item checklist. The checklist is a JSON
-string `[{"text":…,"done":…}]`:
+**Description + checklist.** The checklist is a JSON string
+`[{"text":…,"done":…}]`:
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
-  --data-urlencode "description=Cover the three headline features and link the changelog." \
+  --data-urlencode "description=Cover the three headline features." \
   --data-urlencode 'checklist=[{"text":"Draft the outline","done":false},{"text":"Proofread","done":false}]' \
   $OVERDEW_URL/api/notes/25
 ```
 
-**Claim = assign to self** (`assigned_to` is your username from `/user/profile`):
+**Claim = assign to self** (`assigned_to` is your username from
+`/user/profile`):
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
-  --data-urlencode "assigned_to=alice" \
-  $OVERDEW_URL/api/notes/25
+  --data-urlencode "assigned_to=alice" $OVERDEW_URL/api/notes/25
 ```
 
-**Progress = tick a checklist item.** No per-item endpoint: `GET` the note,
-flip the item's `done` to `true` in the array, and `PUT` the whole array back:
+**Tick a checklist item.** No per-item endpoint: `GET` the card, flip the
+item's `done`, and `PUT` the whole array back (the first `PUT` example above).
+
+**Tags.** Comma-separated, lowercased and deduplicated. `tags` replaces the
+whole set. `tags_add` and `tags_remove` patch it and leave other tags alone
+(removal wins). Do not send `tags` together with either:
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
-  --data-urlencode 'checklist=[{"text":"Draft the outline","done":true},{"text":"Proofread","done":false}]' \
+  --data-urlencode "tags_add=in-review" --data-urlencode "tags_remove=blocked" \
   $OVERDEW_URL/api/notes/25
 ```
 
-**Update the description** (same route, any subset of fields). `description`
-is a whole-field overwrite: to append to or amend a non-empty description,
-`GET` the note first, modify the text, and `PUT` the full value back —
-sending a bare new string destroys the existing content:
+**Description** is a whole-field overwrite. To append to a non-empty one,
+`GET` the card, change the text, and `PUT` the full value back. A bare new
+string destroys the old content.
 
-```bash
-curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
-  --data-urlencode "description=Outline done. Draft in Google Docs, link below." \
-  $OVERDEW_URL/api/notes/25
-```
+### Finish, reopen, talk
 
 **Done = complete.** Sets `status` to 1 and stamps `completed_at` (Unix epoch
-seconds, an integer — not an ISO date):
+seconds, an integer). **Reopen** undoes it:
 
 ```bash
 curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X PUT \
   $OVERDEW_URL/api/notes/25/complete
+curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" -X DELETE \
+  $OVERDEW_URL/api/notes/25/complete
 ```
 
-**Confirm** anything with `GET /notes/{id}`.
+**Comment** to report back or ask something. An `@username` of a board
+member notifies them. Prefer a comment over rewriting the description for
+progress notes and questions:
+
+```bash
+curl -s -H "Authorization: Bearer $OVERDEW_TOKEN" \
+  --data-urlencode "body=Draft is up for review, see the link in the description." \
+  $OVERDEW_URL/api/notes/25/comments
+```
 
 ## Gotchas
 
-- **Create is title-only.** `POST …/notes` reads just `content` (+ optional
-  `color`/`x`/`y`); `description`, `checklist`, `tags`, `assigned_to` are
-  ignored there. Set them with a follow-up `PUT /notes/{id}`.
+- **Create is title-only.** `POST …/notes` ignores `description`, `checklist`,
+  `tags`, `assigned_to`. Set them with a follow-up `PUT /notes/{id}`.
 - **Checklist and description are whole-field overwrites.** Read the current
-  value first, mutate it, and send it back in full — there is no add/tick
-  single-item call, and a bare new `description` string replaces (destroys)
-  what was there.
-- **Body encoding matters, paths don't.** Workspace/board slugs are lowercase
-  and hyphenated (URL-safe as-is), but always use `--data-urlencode` for write
-  fields — checklist JSON and free-text descriptions contain `=`, `{`, spaces.
+  value first, change it, and send it back in full. Only tags have patch
+  fields.
+- **Encode write fields.** Always use `--data-urlencode`: checklist JSON and
+  free text contain `=`, `{` and spaces. Board slugs are URL-safe as is.
 - **`due_date` must be tomorrow or later** (`YYYY-MM-DD`), else `400`.
 - **`stage` takes a stage id already on the board, not a name** (`400`
-  otherwise; `""` clears). Most boards have none — leave it out.
-- **Complete ≠ gone.** A completed note stays on the board (and in the notes
-  list, `status:1`) for ~48h, then auto-archives. There is no un-complete call.
+  otherwise; `""` clears). Most boards have none: leave it out.
+- **Complete ≠ gone.** A completed card stays on the board for ~48h, then
+  auto-archives. Both states are readable by id and reopenable. Completing an
+  archived card returns `409`: reopen it instead.
 - **Live updates via SSE** at `GET /boards/{ws}/{slug}/events`, but a one-shot
-  agent should just re-`GET` the notes list rather than hold the stream open.
-  Pass `?silent=1` on a `PUT` to suppress the broadcast — normally leave it off
-  so collaborators watching the board see your change appear live.
-- **No comments API yet** — report-back is via the description/checklist for now.
+  agent should just re-`GET` rather than hold the stream open. Pass
+  `?silent=1` on a `PUT` to suppress the broadcast; normally leave it off so
+  collaborators watching the board see your change appear live.
+- **Errors**: `400` bad input, `401` token, `403` no access to the board,
+  `404` unknown or deleted card, `409` wrong state.
