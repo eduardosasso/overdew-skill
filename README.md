@@ -1,6 +1,6 @@
 # overdew agent skill
 
-Teach your AI coding agent to operate [overdew](https://overdew.app) boards — list boards, create stories, claim them, tick checklists, and mark them done — over the same API the web app uses.
+Teach your AI coding agent to operate [overdew](https://overdew.app) boards — list boards, create and search stories, claim them, tick checklists, tag and comment, and mark them done or reopen them — over the same API the web app uses.
 
 Works with any agent that supports [Agent Skills](https://skills.sh) (Claude Code, Cursor, Codex, …).
 
